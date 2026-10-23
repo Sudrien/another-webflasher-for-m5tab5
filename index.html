@@ -13,6 +13,8 @@
   .ok { color: var(--ok); } .bad { color: var(--bad); } .muted { color: var(--muted); }
   pre { background: var(--box); padding: .75rem; overflow-x: auto; white-space: pre-wrap; min-height: 6rem; max-height: 20rem; }
   label { display: block; margin: .5rem 0; }
+  footer { margin-top: 2rem; color: var(--muted); font-size: .875rem; }
+  footer a { color: inherit; }
 </style>
 </head>
 <body>
@@ -33,6 +35,10 @@ not flash anything.</p>
 <h2>Output</h2>
 <pre id="out" class="muted"></pre>
 
+<!-- The deploy (.github/workflows/pages.yml) writes the commit into
+     data-build; anywhere else it is left as it is, and reads "local". -->
+<footer><a href="https://github.com/Sudrien/another-webflasher-for-m5tab5">github.com/Sudrien/another-webflasher-for-m5tab5</a> · <span id="build" data-build="__BUILD_SHA__">local</span> · MIT License</footer>
+
 <script>
 'use strict';
 // Espressif's USB vendor ID. The P4's built-in USB-Serial/JTAG is 0x303A:0x1001;
@@ -43,6 +49,13 @@ const KNOWN = { 0x1001: 'ESP32 USB-Serial/JTAG (built in)' };
 const $ = id => document.getElementById(id);
 const hex = n => n === undefined ? 'not reported' : '0x' + n.toString(16).toUpperCase().padStart(4, '0');
 let port = null, reader = null;
+
+// the commit this page was published from, as a link to it
+(() => {
+  const el = $('build'), sha = el.dataset.build;
+  if (!/^[0-9a-f]{40}$/.test(sha)) return;
+  el.innerHTML = `<a href="https://github.com/Sudrien/another-webflasher-for-m5tab5/commit/${sha}" title="The build of this page">${sha.slice(0, 7)}</a>`;
+})();
 
 function say(id, text, cls) { const el = $(id); el.textContent = text; el.className = cls || ''; }
 

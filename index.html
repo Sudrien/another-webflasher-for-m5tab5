@@ -1,0 +1,112 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tab5 Serial Port Test</title>
+<style>
+  :root { color-scheme: light dark; --bg: #fff; --fg: #111; --muted: #666; --ok: #11772e; --bad: #b3261e; --box: #f2f2f2; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161616; --fg: #eee; --muted: #999; --ok: #5fd37a; --bad: #ff8a80; --box: #242424; } }
+  body { background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; max-width: 42rem; margin: 0 auto; padding: 1rem; }
+  button { font: inherit; padding: .5rem 1rem; margin: .25rem .5rem .25rem 0; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .muted { color: var(--muted); }
+  pre { background: var(--box); padding: .75rem; overflow-x: auto; white-space: pre-wrap; min-height: 6rem; max-height: 20rem; }
+  label { display: block; margin: .5rem 0; }
+</style>
+</head>
+<body>
+<h1>Tab5 serial port test</h1>
+<p>This page checks that the browser can ask for permission to the Tab5's
+serial port over USB-C, the port the ESP32-P4 is flashed through. It does
+not flash anything.</p>
+
+<p id="support"></p>
+
+<label><input type="checkbox" id="anyport"> Show every serial port, not only Espressif (USB vendor 0x303A) ones</label>
+<button id="pick" disabled>Choose the Tab5's port</button>
+<button id="listen" disabled>Open at 115200 and show its output</button>
+<button id="close" disabled>Close</button>
+
+<h2>Port</h2>
+<pre id="info" class="muted">No port chosen.</pre>
+<h2>Output</h2>
+<pre id="out" class="muted"></pre>
+
+<script>
+'use strict';
+// Espressif's USB vendor ID. The P4's built-in USB-Serial/JTAG is 0x303A:0x1001;
+// an app using TinyUSB CDC shows another product ID under the same vendor.
+const ESPRESSIF_VID = 0x303A;
+const KNOWN = { 0x1001: 'ESP32 USB-Serial/JTAG (built in)' };
+
+const $ = id => document.getElementById(id);
+const hex = n => n === undefined ? 'not reported' : '0x' + n.toString(16).toUpperCase().padStart(4, '0');
+let port = null, reader = null;
+
+function say(id, text, cls) { const el = $(id); el.textContent = text; el.className = cls || ''; }
+
+if (!('serial' in navigator)) {
+  say('support', window.isSecureContext
+    ? 'This browser has no Web Serial. It needs Chrome, Edge, or Firefox 151 or later on desktop.'
+    : 'This page is not in a secure context (https or localhost), so Web Serial is hidden.', 'bad');
+} else {
+  say('support', 'Web Serial is available in this browser. In Firefox, an explanation appears before the port prompt the first time.', 'ok');
+  $('pick').disabled = false;
+  navigator.serial.addEventListener('disconnect', e => {
+    if (e.target === port) { say('info', 'The port was unplugged.', 'bad'); port = null; reader = null; buttons(); }
+  });
+}
+
+function buttons() {
+  $('listen').disabled = !port || !!reader;
+  $('close').disabled = !reader;
+}
+
+function describe(p) {
+  const i = p.getInfo();
+  const lines = ['USB vendor:  ' + hex(i.usbVendorId), 'USB product: ' + hex(i.usbProductId)];
+  if (i.usbVendorId === ESPRESSIF_VID) lines.push('This is an Espressif device: ' + (KNOWN[i.usbProductId] || 'product not in this page\'s list'));
+  else lines.push('This is not an Espressif device.');
+  return lines.join('\n');
+}
+
+$('pick').onclick = async () => {
+  try {
+    const opts = $('anyport').checked ? {} : { filters: [{ usbVendorId: ESPRESSIF_VID }] };
+    port = await navigator.serial.requestPort(opts);
+    const ok = port.getInfo().usbVendorId === ESPRESSIF_VID;
+    say('info', 'Permission granted.\n' + describe(port), ok ? 'ok' : 'bad');
+  } catch (e) {
+    // NotFoundError: the prompt was cancelled or nothing matched; SecurityError: blocked by policy
+    say('info', e.name === 'NotFoundError' ? 'No port was chosen (cancelled, or no matching device plugged in).' : e.name + ': ' + e.message, 'bad');
+  }
+  buttons();
+};
+
+$('listen').onclick = async () => {
+  const out = $('out');
+  try {
+    await port.open({ baudRate: 115200 });
+    out.textContent = ''; out.className = '';
+    reader = port.readable.getReader();
+    buttons();
+    const dec = new TextDecoder();
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      out.textContent = (out.textContent + dec.decode(value, { stream: true })).slice(-20000);
+      out.scrollTop = out.scrollHeight;
+    }
+  } catch (e) {
+    say('out', 'Could not read the port: ' + e.name + ': ' + e.message, 'bad');
+  }
+  if (reader) { reader.releaseLock(); reader = null; }
+  try { await port.close(); } catch (e) { /* already closed or unplugged */ }
+  buttons();
+};
+
+$('close').onclick = () => { if (reader) reader.cancel(); };
+</script>
+</body>
+</html>

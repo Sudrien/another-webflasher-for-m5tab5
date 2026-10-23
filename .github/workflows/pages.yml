@@ -3,7 +3,7 @@ name: Publish the flasher
 
 # Publishes the site to GitHub Pages. For now the site is the committed
 # files at the repository's root, less the ones that are not the page
-# (this workflow, CLAUDE.md), with the commit it was built from written
+# (the workflows, CLAUDE.md, tools/), with the commit it was built from written
 # into index.html's footer. A later step will fetch each project's
 # release binaries into _site/ here, which is why this deploys from an
 # action rather than from the branch.
@@ -43,7 +43,7 @@ jobs:
           # exactly the committed files, not anything a step left behind
           mkdir _site
           git archive HEAD | tar -x -C _site
-          rm -rf _site/.github _site/CLAUDE.md
+          rm -rf _site/.github _site/CLAUDE.md _site/tools
           # the commit, into the footer, so the page says which build it is
           sed -i "s/data-build=\"__BUILD_SHA__\"/data-build=\"${GITHUB_SHA}\"/" _site/index.html
           # refuse to publish an unstamped page
